@@ -28,9 +28,9 @@ public class NimbusOrderAPI extends NimbusSDK {
     public List<Order> getAllOrders() {
         List<Order> orderList = new ArrayList<>();
         HashMap<String, String> params = new HashMap<>();
+
         int i = 1;
         OrderWrapper orders;
-
         do {
             params.put("page", String.valueOf(i++));
             orders = getOrders(params);
