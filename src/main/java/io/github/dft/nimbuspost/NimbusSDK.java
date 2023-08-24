@@ -1,6 +1,8 @@
 package io.github.dft.nimbuspost;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.dft.nimbuspost.auth.AuthCredentials;
+import io.github.dft.nimbuspost.auth.NimbusCredentials;
 import lombok.SneakyThrows;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -8,35 +10,70 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.HashMap;
 import java.util.concurrent.CompletableFuture;
+import static io.github.dft.nimbuspost.constantcodes.ConstantCode.API_BASE_URL;
 
 public class NimbusSDK {
 
     private final int MAX_ATTEMPTS = 50;
     private final int TIME_OUT_DURATION = 2000;
-    private final String AUTHORIZATION = "NP-API-KEY";
-    private final String API_BASE_URL = "https://ship.nimbuspost.com/api";
+    private final String USERS_LOGIN_ENDPOINT = "/users/login";
 
-    private final String apiKey;
+    private String bearerToken;
+    private String legacyApiKey;
+    private String authorization;
+    private AuthCredentials authCredentials;
+
     private final HttpClient client;
     private final ObjectMapper objectMapper;
 
     public NimbusSDK(String apiKey) {
-        this.apiKey = apiKey;
+        this.legacyApiKey = apiKey;
+        objectMapper = new ObjectMapper();
+        this.client = HttpClient.newHttpClient();
+    }
+
+    public NimbusSDK(AuthCredentials authCredentials) {
+        this.authCredentials = authCredentials;
         objectMapper = new ObjectMapper();
         this.client = HttpClient.newHttpClient();
     }
 
     @SneakyThrows
-    protected URI baseUrl(String endpoint) {
-        return URI.create(API_BASE_URL + endpoint);
+    protected URI baseUrl(String apiBaseUrl, String endpoint) {
+        return URI.create(apiBaseUrl + endpoint);
     }
 
-    @SneakyThrows
     protected HttpRequest get(URI uri) {
+        String token = setAuthorizationHeaderAndGetToken(uri);
         return HttpRequest.newBuilder(uri)
-                          .header(AUTHORIZATION, this.apiKey)
+                          .header(authorization, token)
                           .GET()
                           .build();
+    }
+
+    private String setAuthorizationHeaderAndGetToken(URI uri) {
+        String token;
+        if (API_BASE_URL.contains(uri.getHost())) {
+            authorization = "Authorization";
+            refreshAccessToken();
+            token = this.bearerToken;
+        } else {
+            authorization = "NP-API-KEY";
+            token = this.legacyApiKey;
+        }
+        return token;
+    }
+
+    private void refreshAccessToken() {
+        if (this.bearerToken == null) {
+            String jsonBody = convertToJson(authCredentials);
+            HttpRequest request = HttpRequest.newBuilder(URI.create(API_BASE_URL + USERS_LOGIN_ENDPOINT))
+                                             .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                                             .build();
+
+            NimbusCredentials credentials = getRequestWrapped(request, NimbusCredentials.class);
+            this.bearerToken = "Bearer " + credentials.getData();
+        }
     }
 
     @SneakyThrows
@@ -66,13 +103,18 @@ public class NimbusSDK {
     }
 
     @SneakyThrows
-    public <T> CompletableFuture<HttpResponse<T>> tryResend(HttpClient client,
+    private String convertToJson(Object body) {
+        return objectMapper.writeValueAsString(body);
+    }
+
+    @SneakyThrows
+    private <T> CompletableFuture<HttpResponse<T>> tryResend(HttpClient client,
                                                             HttpRequest request,
                                                             HttpResponse.BodyHandler<T> handler,
                                                             HttpResponse<T> resp,
                                                             int count) {
         int statusCode = resp.statusCode();
-        if ((statusCode == 401 || statusCode == 429) && count < MAX_ATTEMPTS) {
+        if (statusCode == 401 && count < MAX_ATTEMPTS) {
             Thread.sleep(TIME_OUT_DURATION);
             return client.sendAsync(request, handler)
                          .thenComposeAsync(response -> tryResend(client, request, handler, response, count + 1));
