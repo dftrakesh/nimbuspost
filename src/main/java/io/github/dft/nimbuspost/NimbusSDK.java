@@ -18,7 +18,7 @@ public class NimbusSDK {
     private final int TIME_OUT_DURATION = 2000;
     private final String USERS_LOGIN_ENDPOINT = "/users/login";
 
-    private String accessToken;
+    private String bearerToken;
     private String legacyApiKey;
     private String authorization;
     private AuthCredentials authCredentials;
@@ -56,7 +56,7 @@ public class NimbusSDK {
         if (API_BASE_URL.contains(uri.getHost())) {
             authorization = "Authorization";
             refreshAccessToken();
-            token = this.accessToken;
+            token = this.bearerToken;
         } else {
             authorization = "NP-API-KEY";
             token = this.legacyApiKey;
@@ -65,13 +65,14 @@ public class NimbusSDK {
     }
 
     private void refreshAccessToken() {
-        if (this.accessToken == null) {
+        if (this.bearerToken == null) {
+            String jsonBody = convertToJson(authCredentials);
             HttpRequest request = HttpRequest.newBuilder(URI.create(API_BASE_URL + USERS_LOGIN_ENDPOINT))
-                                             .POST(HttpRequest.BodyPublishers.ofString(convertToJson(authCredentials)))
+                                             .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                                              .build();
 
             NimbusCredentials credentials = getRequestWrapped(request, NimbusCredentials.class);
-            this.accessToken = "Bearer " + credentials.getData();
+            this.bearerToken = "Bearer " + credentials.getData();
         }
     }
 
