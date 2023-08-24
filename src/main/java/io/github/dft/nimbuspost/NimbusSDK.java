@@ -73,7 +73,6 @@ public class NimbusSDK {
                                                             int count) {
         int statusCode = resp.statusCode();
         if ((statusCode == 401 || statusCode == 429) && count < MAX_ATTEMPTS) {
-            System.out.println("statusCode: " + statusCode);
             Thread.sleep(TIME_OUT_DURATION);
             return client.sendAsync(request, handler)
                          .thenComposeAsync(response -> tryResend(client, request, handler, response, count + 1));
