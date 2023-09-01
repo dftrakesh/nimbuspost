@@ -51,6 +51,15 @@ public class NimbusSDK {
                           .build();
     }
 
+    protected HttpRequest post(URI uri, Object requestBody) {
+        String token = setAuthorizationHeaderAndGetToken(uri);
+        String jsonBody = convertToJson(requestBody);
+        return HttpRequest.newBuilder(uri)
+                          .header(authorization, token)
+                          .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                          .build();
+    }
+
     private String setAuthorizationHeaderAndGetToken(URI uri) {
         String token;
         if (API_BASE_URL.contains(uri.getHost())) {
