@@ -6,4 +6,5 @@ import lombok.Data;
 public class NimbusCredentials {
     private String status;
     private String data;
+    private String message;
 }
